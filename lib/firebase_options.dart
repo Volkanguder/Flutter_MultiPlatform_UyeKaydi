@@ -23,9 +23,15 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        return ios;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for ios - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -57,24 +63,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'flutter-multiplatform-uyekaydi.firebasestorage.app',
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyD6KH5KiNgbRCcyWHEff6amIKdhyxIlcNw',
-    appId: '1:302417839036:ios:42b41c229ed5cd42d961b9',
-    messagingSenderId: '302417839036',
-    projectId: 'flutter-multiplatform-uyekaydi',
-    storageBucket: 'flutter-multiplatform-uyekaydi.firebasestorage.app',
-    iosBundleId: 'com.example.ilkApp',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyD6KH5KiNgbRCcyWHEff6amIKdhyxIlcNw',
-    appId: '1:302417839036:ios:42b41c229ed5cd42d961b9',
-    messagingSenderId: '302417839036',
-    projectId: 'flutter-multiplatform-uyekaydi',
-    storageBucket: 'flutter-multiplatform-uyekaydi.firebasestorage.app',
-    iosBundleId: 'com.example.ilkApp',
-  );
-
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyBNWMm655V2kcH0D3i8_CPHg4Rw3vvi8n0',
     appId: '1:302417839036:web:035def4e904dce1dd961b9',
@@ -83,5 +71,4 @@ class DefaultFirebaseOptions {
     authDomain: 'flutter-multiplatform-uyekaydi.firebaseapp.com',
     storageBucket: 'flutter-multiplatform-uyekaydi.firebasestorage.app',
   );
-
 }

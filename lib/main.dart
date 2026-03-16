@@ -7,23 +7,29 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 // Firebase'i Flutter içinde başlatmak için gerekli paket
 import 'package:firebase_core/firebase_core.dart';
 
+// Firestore veritabanı işlemleri için gerekli paket
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 // flutterfire configure komutu ile otomatik oluşan Firebase ayar dosyası
 import 'firebase_options.dart';
 
+// Login ekranını açmak için gerekli dosya
+import 'login_page.dart';
+
 /// Uygulamanın başlangıç noktası
-/// Firebase başlatacağımız için async kullanıyoruz
 void main() async {
-  /// Flutter widget sistemi başlatılır
-  /// Firebase gibi async işlemlerden önce çağrılması gerekir
+  /// Firebase gibi async işlemlerden önce Flutter binding başlatılır
   WidgetsFlutterBinding.ensureInitialized();
 
-  /// Firebase uygulaması başlatılır
-  /// Android / Web / Windows için doğru ayarları otomatik seçer
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  /// Firebase başlatılır
+await Firebase.initializeApp(
+  options: DefaultFirebaseOptions.currentPlatform,
+);
 
-  /// Firebase hazır olduktan sonra uygulamayı çalıştırır
+debugPrint('FIREBASE PROJECT ID: ${DefaultFirebaseOptions.currentPlatform.projectId}');
+debugPrint('FIREBASE APP ID: ${DefaultFirebaseOptions.currentPlatform.appId}');
+
+  /// Uygulama başlatılır
   runApp(const YeniUyeKayitApp());
 }
 
@@ -34,17 +40,16 @@ class YeniUyeKayitApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      /// Sağ üstte görünen debug yazısını kaldırır
+      /// Sağ üst debug yazısını kaldırır
       debugShowCheckedModeBanner: false,
 
       /// Uygulama başlığı
       title: 'Yeni Üye Kaydı',
 
-      /// Uygulamanın varsayılan dilini Türkçe yapar
+      /// Türkçe locale
       locale: const Locale('tr', 'TR'),
 
-      /// Flutter'ın yerelleştirme delegeleri
-      /// Tarih seçici, takvim, buton metinleri gibi sistem metinlerini Türkçeleştirir
+      /// Türkçe yerelleştirme desteği
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -56,7 +61,7 @@ class YeniUyeKayitApp extends StatelessWidget {
         Locale('tr', 'TR'),
       ],
 
-      /// Uygulamanın genel tema ayarları
+      /// Tema ayarları
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
@@ -65,16 +70,13 @@ class YeniUyeKayitApp extends StatelessWidget {
         ),
       ),
 
-      /// Açılışta gösterilecek ekran
-      home: const YeniUyeKayitSayfasi(),
+      /// Şimdilik açılış ekranı login
+      home: const LoginPage(),
     );
   }
 }
 
-/// StatefulWidget kullanıyoruz çünkü:
-/// - form alanları değişiyor
-/// - liste güncelleniyor
-/// - kullanıcı seçim yaptıkça ekran yenileniyor
+/// Üye kayıt ekranı
 class YeniUyeKayitSayfasi extends StatefulWidget {
   const YeniUyeKayitSayfasi({super.key});
 
@@ -86,7 +88,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   /// Form doğrulama anahtarı
   final _formKey = GlobalKey<FormState>();
 
-  /// Metin alanları için controller'lar
+  /// Text alanları için controller'lar
   final _adController = TextEditingController();
   final _soyadController = TextEditingController();
   final _emailController = TextEditingController();
@@ -96,13 +98,12 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   String? _cinsiyet;
   DateTime? _dogumTarihi;
 
-  /// Şimdilik üyeleri bellekte tutuyoruz
-  /// Bir sonraki adımda bunu Firestore'a bağlayacağız
-  final List<Uye> _uyeler = [];
+  /// Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void dispose() {
-    /// Controller'ları kapatarak bellek sızıntısını önleriz
+    /// Controller'ları kapatır
     _adController.dispose();
     _soyadController.dispose();
     _emailController.dispose();
@@ -135,46 +136,44 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   }
 
   /// Kaydetme işlemi
-  void _kaydet() {
-    /// Önce form alanlarının doğruluğunu kontrol ederiz
-    final formGecerli = _formKey.currentState?.validate() ?? false;
+  /// Artık veriyi belleğe değil Firestore'a yazıyoruz
+Future<void> _kaydet() async {
+  debugPrint('KAYDET BUTONUNA BASILDI');
 
-    if (!formGecerli) return;
+  final formGecerli = _formKey.currentState?.validate() ?? false;
 
-    /// Cinsiyet seçilmiş mi kontrol edilir
-    if (_cinsiyet == null || _cinsiyet!.isEmpty) {
-      _mesajGoster('Lütfen cinsiyet seçiniz.');
-      return;
-    }
+  if (!formGecerli) return;
 
-    /// Doğum tarihi seçilmiş mi kontrol edilir
-    if (_dogumTarihi == null) {
-      _mesajGoster('Lütfen doğum tarihi seçiniz.');
-      return;
-    }
+  if (_cinsiyet == null || _cinsiyet!.isEmpty) {
+    _mesajGoster('Lütfen cinsiyet seçiniz.');
+    return;
+  }
 
-    /// Yeni üye nesnesi oluşturulur
-    final yeniUye = Uye(
-      ad: _adController.text.trim(),
-      soyad: _soyadController.text.trim(),
-      email: _emailController.text.trim(),
-      telefon: _telefonController.text.trim(),
-      cinsiyet: _cinsiyet!,
-      dogumTarihi: _dogumTarihi!,
-    );
+  if (_dogumTarihi == null) {
+    _mesajGoster('Lütfen doğum tarihi seçiniz.');
+    return;
+  }
 
-    /// Şimdilik listeye eklenir
-    /// Sonraki aşamada Firestore'a yazacağız
-    setState(() {
-      _uyeler.insert(0, yeniUye);
+  try {
+    debugPrint('Firestore\'a veri yazılıyor...');
+
+    await _firestore.collection('members').add({
+      'ad': _adController.text.trim(),
+      'soyad': _soyadController.text.trim(),
+      'email': _emailController.text.trim(),
+      'telefon': _telefonController.text.trim(),
+      'cinsiyet': _cinsiyet,
+      'dogumTarihi': Timestamp.fromDate(_dogumTarihi!),
+      'createdAt': FieldValue.serverTimestamp(),
     });
 
-    /// Form sıfırlanır
     _formuTemizle();
-
-    /// Kullanıcıya bilgi mesajı gösterilir
-    _mesajGoster('Yeni üye kaydı başarıyla eklendi.');
+    _mesajGoster('Yeni üye kaydı Firestore veritabanına eklendi.');
+  } catch (e) {
+    debugPrint('FIRESTORE KAYIT HATASI: $e');
+    _mesajGoster('Kayıt hatası: $e');
   }
+}
 
   /// Formu temizler
   void _formuTemizle() {
@@ -191,7 +190,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     });
   }
 
-  /// Alt tarafta kısa mesaj göstermek için kullanılır
+  /// Snackbar mesajı gösterir
   void _mesajGoster(String mesaj) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -203,7 +202,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      /// Üst başlık alanı
+      /// Üst başlık
       appBar: AppBar(
         title: const Text('Yeni Üye Kaydı'),
         centerTitle: true,
@@ -212,7 +211,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            /// Ekran genişse form ve listeyi yan yana göster
+            /// Geniş ekranda yan yana
             final genisEkran = constraints.maxWidth >= 900;
 
             if (genisEkran) {
@@ -231,7 +230,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
               );
             }
 
-            /// Ekran darsa form ve listeyi alt alta göster
+            /// Dar ekranda alt alta
             return Column(
               children: [
                 Expanded(
@@ -251,7 +250,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Form alanını oluşturan bölüm
+  /// Form alanı
   Widget _formAlani() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -312,7 +311,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
-                    /// Cinsiyet seçim alanı
+                    /// Cinsiyet alanı
                     DropdownButtonFormField<String>(
                       value: _cinsiyet,
                       decoration: const InputDecoration(
@@ -357,7 +356,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 24),
 
-                    /// İşlem butonları
+                    /// Butonlar
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
@@ -384,7 +383,8 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Üye listesini oluşturan bölüm
+  /// Üye listesi
+  /// Artık Firestore stream ile canlı veri gösteriyoruz
   Widget _uyeListesi() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -398,49 +398,105 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                 'Kayıtlı Üyeler',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 8),
-              Text('Toplam üye: ${_uyeler.length}'),
               const SizedBox(height: 16),
 
+              /// Firestore'dan gelen canlı veriyi dinler
               Expanded(
-                child: _uyeler.isEmpty
-                    ? const Center(
-                        child: Text('Henüz üye eklenmedi.'),
-                      )
-                    : ListView.separated(
-                        itemCount: _uyeler.length,
-                        separatorBuilder: (_, __) => const Divider(),
-                        itemBuilder: (context, index) {
-                          final uye = _uyeler[index];
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _firestore
+                      .collection('members')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    /// Yüklenme durumu
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      );
+                    }
 
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                uye.ad.isNotEmpty
-                                    ? uye.ad[0].toUpperCase()
-                                    : '?',
-                              ),
-                            ),
-                            title: Text('${uye.ad} ${uye.soyad}'),
-                            subtitle: Text(
-                              '${uye.email}\n'
-                              '${uye.telefon}\n'
-                              '${uye.cinsiyet} - ${_tarihFormatla(uye.dogumTarihi)}',
-                            ),
-                            isThreeLine: true,
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              tooltip: 'Sil',
-                              onPressed: () {
-                                setState(() {
-                                  _uyeler.removeAt(index);
-                                });
-                                _mesajGoster('Üye kaydı silindi.');
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                    /// Hata durumu
+                    if (snapshot.hasError) {
+                      return const Center(
+                        child: Text('Veriler yüklenirken hata oluştu.'),
+                      );
+                    }
+
+                    /// Veri yoksa
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(
+                        child: Text('Henüz üye eklenmedi.'),
+                      );
+                    }
+
+                    /// Gelen belgeler
+                    final docs = snapshot.data!.docs;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Toplam üye: ${docs.length}'),
+                        const SizedBox(height: 16),
+
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: docs.length,
+                            separatorBuilder: (_, __) => const Divider(),
+                            itemBuilder: (context, index) {
+                              final doc = docs[index];
+                              final data =
+                                  doc.data() as Map<String, dynamic>;
+
+                              final ad = data['ad'] ?? '';
+                              final soyad = data['soyad'] ?? '';
+                              final email = data['email'] ?? '';
+                              final telefon = data['telefon'] ?? '';
+                              final cinsiyet = data['cinsiyet'] ?? '';
+                              final dogumTarihiTimestamp =
+                                  data['dogumTarihi'] as Timestamp?;
+
+                              final dogumTarihi = dogumTarihiTimestamp != null
+                                  ? dogumTarihiTimestamp.toDate()
+                                  : null;
+
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  child: Text(
+                                    ad.isNotEmpty
+                                        ? ad[0].toUpperCase()
+                                        : '?',
+                                  ),
+                                ),
+                                title: Text('$ad $soyad'),
+                                subtitle: Text(
+                                  '$email\n'
+                                  '$telefon\n'
+                                  '$cinsiyet - ${dogumTarihi != null ? _tarihFormatla(dogumTarihi) : '-'}',
+                                ),
+                                isThreeLine: true,
+
+                                /// Şimdilik silme açık
+                                /// Sonraki aşamada rol sistemine göre kısıtlayacağız
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  tooltip: 'Sil',
+                                  onPressed: () async {
+                                    await _firestore
+                                        .collection('members')
+                                        .doc(doc.id)
+                                        .delete();
+
+                                    _mesajGoster('Üye kaydı silindi.');
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -449,7 +505,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Tekrarlayan text alanlarını kısaltmak için yardımcı widget
+  /// Yardımcı text field widget'ı
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -476,7 +532,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     return null;
   }
 
-  /// E-posta doğrulama kontrolü
+  /// E-posta kontrolü
   String? _emailKontrol(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Bu alan zorunludur';
@@ -489,7 +545,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     return null;
   }
 
-  /// Telefon doğrulama kontrolü
+  /// Telefon kontrolü
   String? _telefonKontrol(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Bu alan zorunludur';
@@ -513,6 +569,8 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
 }
 
 /// Üye veri modeli
+/// Şimdilik bu model ekranda doğrudan kullanılmıyor
+/// Ama ileride repository / service yapısında faydalı olacak
 class Uye {
   final String ad;
   final String soyad;
