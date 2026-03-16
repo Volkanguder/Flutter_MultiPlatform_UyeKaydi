@@ -1,25 +1,50 @@
+// Flutter'ın temel arayüz kütüphanesi
 import 'package:flutter/material.dart';
+
+// Uygulamanın Türkçe yerelleştirme desteği için gerekli paket
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+// Firebase'i Flutter içinde başlatmak için gerekli paket
+import 'package:firebase_core/firebase_core.dart';
+
+// flutterfire configure komutu ile otomatik oluşan Firebase ayar dosyası
+import 'firebase_options.dart';
+
 /// Uygulamanın başlangıç noktası
-void main() {
+/// Firebase başlatacağımız için async kullanıyoruz
+void main() async {
+  /// Flutter widget sistemi başlatılır
+  /// Firebase gibi async işlemlerden önce çağrılması gerekir
+  WidgetsFlutterBinding.ensureInitialized();
+
+  /// Firebase uygulaması başlatılır
+  /// Android / Web / Windows için doğru ayarları otomatik seçer
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  /// Firebase hazır olduktan sonra uygulamayı çalıştırır
   runApp(const YeniUyeKayitApp());
 }
 
-/// Ana uygulama
+/// Ana uygulama widget'ı
 class YeniUyeKayitApp extends StatelessWidget {
   const YeniUyeKayitApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      /// Sağ üstte görünen debug yazısını kaldırır
       debugShowCheckedModeBanner: false,
+
+      /// Uygulama başlığı
       title: 'Yeni Üye Kaydı',
 
-      /// Uygulamanın Türkçe çalışmasını sağlar
+      /// Uygulamanın varsayılan dilini Türkçe yapar
       locale: const Locale('tr', 'TR'),
 
-      /// Flutter'ın yerelleştirme desteği
+      /// Flutter'ın yerelleştirme delegeleri
+      /// Tarih seçici, takvim, buton metinleri gibi sistem metinlerini Türkçeleştirir
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -31,6 +56,7 @@ class YeniUyeKayitApp extends StatelessWidget {
         Locale('tr', 'TR'),
       ],
 
+      /// Uygulamanın genel tema ayarları
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
@@ -38,6 +64,8 @@ class YeniUyeKayitApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
       ),
+
+      /// Açılışta gösterilecek ekran
       home: const YeniUyeKayitSayfasi(),
     );
   }
@@ -68,11 +96,13 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   String? _cinsiyet;
   DateTime? _dogumTarihi;
 
-  /// Eklenen üyeler burada tutulur
+  /// Şimdilik üyeleri bellekte tutuyoruz
+  /// Bir sonraki adımda bunu Firestore'a bağlayacağız
   final List<Uye> _uyeler = [];
 
   @override
   void dispose() {
+    /// Controller'ları kapatarak bellek sızıntısını önleriz
     _adController.dispose();
     _soyadController.dispose();
     _emailController.dispose();
@@ -80,7 +110,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     super.dispose();
   }
 
-  /// Doğum tarihi seçme
+  /// Doğum tarihi seçme işlemi
   Future<void> _dogumTarihiSec() async {
     final now = DateTime.now();
 
@@ -106,20 +136,24 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
 
   /// Kaydetme işlemi
   void _kaydet() {
+    /// Önce form alanlarının doğruluğunu kontrol ederiz
     final formGecerli = _formKey.currentState?.validate() ?? false;
 
     if (!formGecerli) return;
 
+    /// Cinsiyet seçilmiş mi kontrol edilir
     if (_cinsiyet == null || _cinsiyet!.isEmpty) {
       _mesajGoster('Lütfen cinsiyet seçiniz.');
       return;
     }
 
+    /// Doğum tarihi seçilmiş mi kontrol edilir
     if (_dogumTarihi == null) {
       _mesajGoster('Lütfen doğum tarihi seçiniz.');
       return;
     }
 
+    /// Yeni üye nesnesi oluşturulur
     final yeniUye = Uye(
       ad: _adController.text.trim(),
       soyad: _soyadController.text.trim(),
@@ -129,11 +163,16 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
       dogumTarihi: _dogumTarihi!,
     );
 
+    /// Şimdilik listeye eklenir
+    /// Sonraki aşamada Firestore'a yazacağız
     setState(() {
       _uyeler.insert(0, yeniUye);
     });
 
+    /// Form sıfırlanır
     _formuTemizle();
+
+    /// Kullanıcıya bilgi mesajı gösterilir
     _mesajGoster('Yeni üye kaydı başarıyla eklendi.');
   }
 
@@ -152,7 +191,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     });
   }
 
-  /// Snackbar mesajı gösterir
+  /// Alt tarafta kısa mesaj göstermek için kullanılır
   void _mesajGoster(String mesaj) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -164,13 +203,16 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      /// Üst başlık alanı
       appBar: AppBar(
         title: const Text('Yeni Üye Kaydı'),
         centerTitle: true,
       ),
+
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            /// Ekran genişse form ve listeyi yan yana göster
             final genisEkran = constraints.maxWidth >= 900;
 
             if (genisEkran) {
@@ -189,6 +231,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
               );
             }
 
+            /// Ekran darsa form ve listeyi alt alta göster
             return Column(
               children: [
                 Expanded(
@@ -208,7 +251,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Form alanı
+  /// Form alanını oluşturan bölüm
   Widget _formAlani() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -233,6 +276,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 24),
 
+                    /// Ad alanı
                     _buildTextField(
                       controller: _adController,
                       label: 'Ad',
@@ -241,6 +285,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
+                    /// Soyad alanı
                     _buildTextField(
                       controller: _soyadController,
                       label: 'Soyad',
@@ -249,6 +294,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
+                    /// E-posta alanı
                     _buildTextField(
                       controller: _emailController,
                       label: 'E-posta',
@@ -257,6 +303,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
+                    /// Telefon alanı
                     _buildTextField(
                       controller: _telefonController,
                       label: 'Telefon',
@@ -265,6 +312,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
+                    /// Cinsiyet seçim alanı
                     DropdownButtonFormField<String>(
                       value: _cinsiyet,
                       decoration: const InputDecoration(
@@ -292,6 +340,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 16),
 
+                    /// Doğum tarihi seçim alanı
                     InkWell(
                       onTap: _dogumTarihiSec,
                       child: InputDecorator(
@@ -308,6 +357,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                     ),
                     const SizedBox(height: 24),
 
+                    /// İşlem butonları
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
@@ -334,7 +384,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Üye listesi
+  /// Üye listesini oluşturan bölüm
   Widget _uyeListesi() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -351,6 +401,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
               const SizedBox(height: 8),
               Text('Toplam üye: ${_uyeler.length}'),
               const SizedBox(height: 16),
+
               Expanded(
                 child: _uyeler.isEmpty
                     ? const Center(
@@ -365,7 +416,9 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
-                                uye.ad.isNotEmpty ? uye.ad[0].toUpperCase() : '?',
+                                uye.ad.isNotEmpty
+                                    ? uye.ad[0].toUpperCase()
+                                    : '?',
                               ),
                             ),
                             title: Text('${uye.ad} ${uye.soyad}'),
@@ -415,7 +468,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     );
   }
 
-  /// Boş kontrolü
+  /// Boş alan kontrolü
   String? _bosKontrol(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Bu alan zorunludur';
@@ -423,7 +476,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     return null;
   }
 
-  /// E-posta kontrolü
+  /// E-posta doğrulama kontrolü
   String? _emailKontrol(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Bu alan zorunludur';
@@ -436,7 +489,7 @@ class _YeniUyeKayitSayfasiState extends State<YeniUyeKayitSayfasi> {
     return null;
   }
 
-  /// Telefon kontrolü
+  /// Telefon doğrulama kontrolü
   String? _telefonKontrol(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Bu alan zorunludur';
