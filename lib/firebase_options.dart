@@ -83,4 +83,5 @@ class DefaultFirebaseOptions {
     authDomain: 'flutter-multiplatform-uyekaydi.firebaseapp.com',
     storageBucket: 'flutter-multiplatform-uyekaydi.firebasestorage.app',
   );
+
 }
