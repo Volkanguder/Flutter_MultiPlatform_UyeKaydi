@@ -10,6 +10,9 @@ import 'package:firebase_core/firebase_core.dart';
 // flutterfire configure komutu ile otomatik oluşan Firebase ayar dosyası
 import 'firebase_options.dart';
 
+/// Login sayfasını yükler
+import 'login_page.dart';
+
 /// Uygulamanın başlangıç noktası
 /// Firebase başlatacağımız için async kullanıyoruz
 void main() async {
@@ -66,7 +69,7 @@ class YeniUyeKayitApp extends StatelessWidget {
       ),
 
       /// Açılışta gösterilecek ekran
-      home: const YeniUyeKayitSayfasi(),
+      home: const LoginPage(),
     );
   }
 }
